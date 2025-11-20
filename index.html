@@ -42,6 +42,8 @@
       z-index: 10;
     }
     th:hover { background: #ccc; }
+    th.asc::after { content: " ▲"; }
+    th.desc::after { content: " ▼"; }
     #table-container {
       max-height: 550px;
       overflow-y: scroll;
@@ -190,17 +192,62 @@ function renderTable(rows) {
   });
 }
 
+/* ----------- ORDENAR AO CLICAR NO CABEÇALHO (1º clique = maior → menor) ----------- */
+let sortState = {}; // 1 = crescente, -1 = decrescente
+
+document.querySelectorAll("th").forEach(th => {
+  th.addEventListener("click", () => {
+    const col = th.getAttribute("data-col");
+
+    // Alterna entre crescente e decrescente
+    if (sortState[col] === -1) {
+      sortState[col] = 1; // próximo será crescente
+    } else {
+      sortState[col] = -1; // primeiro clique sempre decrescente
+    }
+
+    // Remove ícones de outras colunas
+    document.querySelectorAll("th").forEach(h => {
+      h.classList.remove("asc", "desc");
+    });
+
+    if (sortState[col] === 1) th.classList.add("asc");
+    else th.classList.add("desc");
+
+    let toSort = [...currentData];
+    const seen = new Set();
+    const unique = [];
+    toSort.forEach(r => {
+      if (!seen.has(r.pokemon_id)) {
+        seen.add(r.pokemon_id);
+        unique.push(r);
+      }
+    });
+
+    const isText = col === "pokemon_name" || col === "types";
+    const multiplier = sortState[col]; // -1 ou 1
+
+    unique.sort((a, b) => {
+      let va = isText ? (a[col] || "") : Number(a[col] || 0);
+      let vb = isText ? (b[col] || "") : Number(b[col] || 0);
+      if (isText) return multiplier * va.localeCompare(vb);
+      else return multiplier * (va - vb);
+    });
+
+    currentData = unique.flatMap(u => DATA.filter(r => r.pokemon_id === u.pokemon_id));
+    renderTable(unique);
+  });
+});
+
 /* ----------- FILTRO COMBINADO (NOME + MOVES) ----------- */
 function filterData() {
   let result = [...DATA];
 
-  // Filtro por nome do Pokémon (só aplica se não estiver vazio)
   const pokemonSearch = document.getElementById("pokemon-search").value.trim();
   if (pokemonSearch !== "") {
     result = result.filter(row => row.pokemon_name.toLowerCase().includes(pokemonSearch.toLowerCase()));
   }
 
-  // Filtro por moves
   const chosen = [
     document.getElementById("move1").value.trim(),
     document.getElementById("move2").value.trim(),
@@ -224,46 +271,6 @@ function filterData() {
   currentData = result;
   renderTable(result);
 }
-
-/* ----------- ORDENAR AO CLICAR NO CABEÇALHO ----------- */
-let sortState = {};
-document.querySelectorAll("th").forEach(th => {
-  th.addEventListener("click", () => {
-    const col = th.getAttribute("data-col");
-    const current = sortState[col] || 0;
-    sortState = {};
-    sortState[col] = current === 0 ? 1 : (current === 1 ? -1 : 0);
-
-    let toSort = [...currentData];
-    const seen = new Set();
-    const unique = [];
-    toSort.forEach(r => {
-      if (!seen.has(r.pokemon_id)) {
-        seen.add(r.pokemon_id);
-        unique.push(r);
-      }
-    });
-
-    if (sortState[col] === 0) {
-      currentData = [...originalOrder];
-      renderTable(currentData);
-      return;
-    }
-
-    const isText = col === "pokemon_name" || col === "types";
-    const multiplier = sortState[col];
-
-    unique.sort((a, b) => {
-      let va = isText ? (a[col] || "") : Number(a[col] || 0);
-      let vb = isText ? (b[col] || "") : Number(b[col] || 0);
-      if (isText) return multiplier * va.localeCompare(vb);
-      else return multiplier * (va - vb);
-    });
-
-    currentData = unique.flatMap(u => DATA.filter(r => r.pokemon_id === u.pokemon_id));
-    renderTable(unique);
-  });
-});
 
 /* ----------- LISTENERS ----------- */
 document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
