@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,22 +9,14 @@
     h1 { text-align: center; }
     .input-container {
       display: flex;
-      justify-content: center;
+      gap: 10px;
       margin-bottom: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
     }
-    textarea {
-      padding: 12px;
-      width: 520px;
-      min-height: 80px;
-      font-size: 16px;
-      border: 2px solid #bbb;
-      border-radius: 8px;
-      resize: vertical;
-      font-family: Arial, sans-serif;
-    }
-    textarea:focus {
-      outline: none;
-      border-color: #3b82f6;
+    input {
+      padding: 8px;
+      width: 220px;
     }
     table {
       width: 100%;
@@ -57,7 +49,10 @@
 <body>
   <h1>Pokémon Move Finder</h1>
   <div class="input-container">
-    <textarea id="moves-input" placeholder="Digite até 4 moves (separados por vírgula, ; ou enter)&#10;Exemplo: Thunderbolt, Ice Beam, Earthquake" rows="4"></textarea>
+    <input id="move1" list="moves" placeholder="Move 1" />
+    <input id="move2" list="moves" placeholder="Move 2" />
+    <input id="move3" list="moves" placeholder="Move 3" />
+    <input id="move4" list="moves" placeholder="Move 4" />
     <datalist id="moves"></datalist>
   </div>
   <div id="table-container">
@@ -79,7 +74,6 @@
       <tbody id="table-body"></tbody>
     </table>
   </div>
-
 <script>
 /* ---------------- PARSER CSV SEGURO ---------------- */
 function parseCSV(text) {
@@ -90,16 +84,33 @@ function parseCSV(text) {
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     const next = text[i + 1];
-    if (char === '"' && next === '"') { cell += '"'; i++; }
-    else if (char === '"') { insideQuotes = !insideQuotes; }
-    else if (char === "," && !insideQuotes) { row.push(cell); cell = ""; }
-    else if (char === "\n" && !insideQuotes) { row.push(cell); rows.push(row); row = []; cell = ""; }
-    else { cell += char; }
+    if (char === '"' && next === '"') {
+      cell += '"';
+      i++;
+    }
+    else if (char === '"') {
+      insideQuotes = !insideQuotes;
+    }
+    else if (char === "," && !insideQuotes) {
+      row.push(cell);
+      cell = "";
+    }
+    else if (char === "\n" && !insideQuotes) {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    }
+    else {
+      cell += char;
+    }
   }
-  if (cell !== "" || row.length > 0) { row.push(cell); rows.push(row); }
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
   return rows;
 }
-
 /* ---------------- CARREGAR CSV ---------------- */
 let DATA = [];
 async function loadCSV() {
@@ -115,12 +126,11 @@ async function loadCSV() {
   fillMoveList(DATA);
   renderTable(DATA);
 }
-
 /* ----------- LISTA DE MOVES ----------- */
 function fillMoveList(rows) {
   const moveSet = new Set(rows.map(r => r.move_name));
   const dl = document.getElementById("moves");
-  [...moveSet].sort().forEach(m => {
+  moveSet.forEach(m => {
     if (m) {
       const o = document.createElement("option");
       o.value = m;
@@ -128,7 +138,6 @@ function fillMoveList(rows) {
     }
   });
 }
-
 /* ----------- GERAR TABELA ----------- */
 function renderTable(rows) {
   const tbody = document.getElementById("table-body");
@@ -166,26 +175,18 @@ function renderTable(rows) {
     tbody.appendChild(tr);
   });
 }
-
 /* ----------- FILTRO POR MOVES ----------- */
 function filterData() {
-  const input = document.getElementById("moves-input").value.trim();
-  if (!input) {
-    renderTable(DATA);
-    return;
-  }
-
-  const chosen = input
-    .split(/[\n,;]/)           // separa por vírgula, ; ou enter
-    .map(m => m.trim())
-    .filter(m => m !== "")
-    .slice(0, 4);              // máximo 4 moves
-
+  const chosen = [
+    move1.value.trim(),
+    move2.value.trim(),
+    move3.value.trim(),
+    move4.value.trim()
+  ].filter(m => m !== "");
   if (chosen.length === 0) {
     renderTable(DATA);
     return;
   }
-
   const pokemonMoveCount = {};
   DATA.forEach(row => {
     if (chosen.includes(row.move_name)) {
@@ -195,17 +196,12 @@ function filterData() {
       pokemonMoveCount[row.pokemon_name].add(row.move_name);
     }
   });
-
   const validPokemonNames = Object.keys(pokemonMoveCount)
     .filter(name => pokemonMoveCount[name].size === chosen.length);
-
   const result = DATA.filter(row => validPokemonNames.includes(row.pokemon_name));
   renderTable(result);
 }
-
-/* ----------- EVENT LISTENER ----------- */
-document.getElementById("moves-input").addEventListener("input", filterData);
-
+document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
 loadCSV();
 </script>
 </body>
