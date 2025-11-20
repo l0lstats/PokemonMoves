@@ -56,11 +56,9 @@
 <body>
   <h1>Pokémon Move Finder</h1>
   <div class="input-container">
-    <!-- PRIMEIRA CAIXA: BUSCA POR NOME DO POKÉMON -->
     <input id="pokemon-search" list="pokemon-names" placeholder="Nome do Pokémon" />
     <datalist id="pokemon-names"></datalist>
 
-    <!-- AS 4 CAIXAS DE MOVES -->
     <input id="move1" list="moves" placeholder="Move 1" />
     <input id="move2" list="moves" placeholder="Move 2" />
     <input id="move3" list="moves" placeholder="Move 3" />
@@ -143,7 +141,7 @@ function fillMoveList(rows) {
   });
 }
 
-/* ----------- LISTA DE NOMES DE POKÉMON (AUTOCOMPLETE) ----------- */
+/* ----------- LISTA DE NOMES DE POKÉMON ----------- */
 function fillPokemonNameList(rows) {
   const nameSet = new Set();
   rows.forEach(r => nameSet.add(r.pokemon_name));
@@ -157,19 +155,21 @@ function fillPokemonNameList(rows) {
 
 /* ----------- GERAR TABELA ----------- */
 function renderTable(rows) {
-  const tbody = unique = [];
+  const tbody = document.getElementById("table-body");
+  tbody.innerHTML = "";
   const seen = new Set();
+  const uniqueRows = [];
   rows.forEach(r => {
     if (!seen.has(r.pokemon_id)) {
       seen.add(r.pokemon_id);
-      unique.push(r);
+      uniqueRows.push(r);
     }
   });
-  if (unique.length === 0) {
+  if (uniqueRows.length === 0) {
     tbody.innerHTML = "<tr><td colspan='10'>Nenhum Pokémon encontrado</td></tr>";
     return;
   }
-  unique.forEach(r => {
+  uniqueRows.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.pokemon_id}</td>
@@ -194,9 +194,9 @@ function renderTable(rows) {
 function filterData() {
   let result = [...DATA];
 
-  // Filtro por nome do Pokémon
+  // Filtro por nome do Pokémon (só aplica se não estiver vazio)
   const pokemonSearch = document.getElementById("pokemon-search").value.trim();
-  if (pokemonSearch) {
+  if (pokemonSearch !== "") {
     result = result.filter(row => row.pokemon_name.toLowerCase().includes(pokemonSearch.toLowerCase()));
   }
 
