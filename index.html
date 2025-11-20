@@ -144,17 +144,25 @@
         return;
       }
 
-      let filtered = DATA;
-
-      chosen.forEach(move => {
-        filtered = filtered.filter(r => r.move_name === move);
+      // Para cada move, encontre TODOS os evolution_tree que aprendem esse move
+      const evolutionSets = chosen.map(move => {
+        return new Set(
+          DATA
+            .filter(r => r.move_name === move)
+            .map(r => r.evolution_tree)
+        );
       });
 
-      // Filter through evolution tree so we show entire evolution line
-      const evoTrees = new Set(filtered.map(r => r.evolution_tree));
-      const evoFiltered = DATA.filter(r => evoTrees.has(r.evolution_tree));
+      // Interseção dos evolution_tree que aprendem TODOS os moves escolhidos
+      let intersection = evolutionSets[0];
+      for (let i = 1; i < evolutionSets.length; i++) {
+        intersection = new Set([...intersection].filter(x => evolutionSets[i].has(x)));
+      }
 
-      renderTable(evoFiltered);
+      // Filtra para retornar todas as evoluções desses evolution_tree
+      const finalResult = DATA.filter(r => intersection.has(r.evolution_tree));
+
+      renderTable(finalResult);
     }
 
     document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
