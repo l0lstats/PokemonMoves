@@ -1,67 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pokémon Move Finder</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-    h1 { text-align: center; }
-
+    h1 { text-align: center; color: #333; }
     .input-container {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       margin-bottom: 20px;
       justify-content: center;
       flex-wrap: wrap;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     input {
-      padding: 8px;
-      width: 220px;
+      padding: 12px;
+      width: 240px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
     }
-
+    input:focus { border-color: #3b82f6; outline: none; }
     table {
       width: 100%;
       border-collapse: collapse;
       background: white;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
-
     thead {
       position: sticky;
       top: 0;
-      background: #ddd;
+      background: #3b82f6;
+      color: white;
       z-index: 10;
     }
-
     th, td {
-      border: 1px solid #bbb;
-      padding: 8px;
+      border: 1px solid #ddd;
+      padding: 12px;
       text-align: center;
     }
-
+    th { font-weight: bold; }
     #table-container {
-      max-height: 550px;
-      overflow-y: scroll;
-      border: 1px solid #999;
-      background: white;
+      max-height: 70vh;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 8px;
     }
-
     .pokemon-img {
-      width: 72px;
+      width: 96px;
+      height: 96px;
+      image-rendering: pixelated;
+      border-radius: 8px;
+    }
+    .pokemon-name {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-size: 18px;
     }
   </style>
 </head>
 <body>
-  <h1>Pokémon Move Finder</h1>
-
+  <h1>Pokémon que aprendem os Moves selecionados</h1>
   <div class="input-container">
-    <input id="move1" list="moves" placeholder="Move 1" />
-    <input id="move2" list="moves" placeholder="Move 2" />
-    <input id="move3" list="moves" placeholder="Move 3" />
-    <input id="move4" list="moves" placeholder="Move 4" />
+    <input id="move1" list="moves" placeholder="Move 1 (ex: Thunderbolt)" />
+    <input id="move2" list="moves" placeholder="Move 2 (opcional)" />
+    <input id="move3" list="moves" placeholder="Move 3 (opcional)" />
+    <input id="move4" list="moves" placeholder="Move 4 (opcional)" />
     <datalist id="moves"></datalist>
   </div>
-
   <div id="table-container">
     <table>
       <thead>
@@ -82,24 +99,23 @@
       const response = await fetch("BaseDadosPokemon.csv");
       const text = await response.text();
       const lines = text.split("\n");
-      const headers = lines[0].split(",");
-
-      const rows = lines.slice(1).map(line => {
-        const cols = line.split(",");
+      const headers = lines[0].split(",").map(h => h.trim());
+      const rows = lines.slice(1).filter(line => line.trim()).map(line => {
+        const cols = line.split(",").map(c => c.trim());
         let obj = {};
-        headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
+        headers.forEach((h, i) => obj[h] = cols[i] || "");
         return obj;
       });
-
       DATA = rows;
       fillMoveList(rows);
-      renderTable(rows);
+      renderTable(rows); // Mostra todos ao carregar
     }
 
     function fillMoveList(rows) {
-      const moveSet = new Set(rows.map(r => r.move_name));
+      const moveSet = new Set();
+      rows.forEach(r => r.move_name && moveSet.add(r.move_name));
       const dl = document.getElementById("moves");
-      moveSet.forEach(m => {
+      [...moveSet].sort().forEach(m => {
         const o = document.createElement("option");
         o.value = m;
         dl.appendChild(o);
@@ -110,62 +126,83 @@
       const tbody = document.getElementById("table-body");
       tbody.innerHTML = "";
 
-      // Group by evolution tree to avoid duplicates
-      const grouped = {};
-      rows.forEach(r => {
-        if (!grouped[r.evolution_tree]) grouped[r.evolution_tree] = r;
-      });
+      // Remove duplicatas por pokemon_id e ordena por Dex
+      const seen = new Set();
+      const unique = rows
+        .filter(r => {
+          if (seen.has(r.pokemon_id)) return false;
+          seen.add(r.pokemon_id);
+          return true;
+        })
+        .sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
 
-      Object.values(grouped).forEach(r => {
+      if (unique.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="no-results">Nenhum Pokémon aprende todos os moves selecionados</td></tr>`;
+        return;
+      }
+
+      unique.forEach(r => {
         const tr = document.createElement("tr");
-
         tr.innerHTML = `
-          <td>${r.pokemon_id}</td>
+          <td>#${String(r.pokemon_id).padStart(4, '0')}</td>
           <td>
-            <div>${r.pokemon_name}</div>
-            <img class="pokemon-img" src="${r.sprites}" />
+            <div class="pokemon-name">${r.pokemon_name}</div>
+            <img class="pokemon-img" src="${r.sprites}" alt="${r.pokemon_name}" loading="lazy" />
           </td>
-          <td>${r.types}</td>
+          <td>${r.types.replace(' / ', '<br>')}</td>
         `;
-
         tbody.appendChild(tr);
       });
     }
 
     function filterData() {
-      const m1 = document.getElementById("move1").value.trim();
-      const m2 = document.getElementById("move2").value.trim();
-      const m3 = document.getElementById("move3").value.trim();
-      const m4 = document.getElementById("move4").value.trim();
+      const moves = ['move1','move2','move3','move4']
+        .map(id => document.getElementById(id).value.trim())
+        .filter(m => m !== "");
 
-      const chosen = [m1, m2, m3, m4].filter(m => m !== "");
-      if (chosen.length === 0) {
+      if (moves.length === 0) {
         renderTable(DATA);
         return;
       }
 
-      // Para cada move, encontre TODOS os evolution_tree que aprendem esse move
-      const evolutionSets = chosen.map(move => {
-        return new Set(
-          DATA
-            .filter(r => r.move_name === move)
-            .map(r => r.evolution_tree)
-        );
+      // Encontra todos os pokemon_name que aparecem em linhas com os moves escolhidos
+      const pokemonThatLearn = new Set();
+
+      DATA.forEach(row => {
+        if (moves.includes(row.move_name)) {
+          pokemonThatLearn.add(row.pokemon_name);
+        }
       });
 
-      // Interseção dos evolution_tree que aprendem TODOS os moves escolhidos
-      let intersection = evolutionSets[0];
-      for (let i = 1; i < evolutionSets.length; i++) {
-        intersection = new Set([...intersection].filter(x => evolutionSets[i].has(x)));
-      }
+      // Se o Pokémon (qualquer forma) aprende TODOS os moves → inclui todas as suas linhas
+      const validPokemonNames = new Set();
 
-      // Filtra para retornar todas as evoluções desses evolution_tree
-      const finalResult = DATA.filter(r => intersection.has(r.evolution_tree));
+      const countPerPokemon = {};
+      DATA.forEach(row => {
+        if (pokemonThatLearn.has(row.pokemon_name)) {
+          if (!countPerPokemon[row.pokemon_name]) countPerPokemon[row.pokemon_name] = new Set();
+          countPerPokemon[row.pokemon_name].add(row.move_name);
+        }
+      });
 
-      renderTable(finalResult);
+      Object.keys(countPerPokemon).forEach(name => {
+        const learnedMoves = [...countPerPokemon[name]];
+        if (moves.every(m => learnedMoves.includes(m))) {
+          validPokemonNames.add(name);
+        }
+      });
+
+      // Filtra todas as linhas que têm pokemon_name válido
+      const result = DATA.filter(row => validPokemonNames.has(row.pokemon_name));
+
+      renderTable(result);
     }
 
-    document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
+    // Atualiza ao digitar qualquer coisa
+    document.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("input", filterData);
+      inp.addEventListener("change", filterData);
+    });
 
     loadCSV();
   </script>
