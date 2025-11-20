@@ -1,178 +1,165 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pokémon que aprendem Moves - l0lstats</title>
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokémon Move Finder</title>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-    h1 { text-align: center; color: #222; }
-    .search-container { max-width: 1100px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); overflow: hidden; }
-    .inputs { padding: 24px; background: #f9f9f9; border-bottom: 1px solid #eee; }
-    .move-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-    .input-wrapper { position: relative; }
-    input { width: 100%; padding: 14px 16px; font-size: 16px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; }
-    input:focus { border-color: #3b82f6; outline: none; }
-    .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; max-height: 260px; overflow-y: auto; z-index: 1000; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
-    .suggestion-item { padding: 12px 16px; cursor: pointer; }
-    .suggestion-item:hover { background: #e3f2fd; }
-    .table-container { height: 76vh; overflow-y: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    thead th { position: sticky; top: 0; background: #3b82f6; color: white; padding: 16px; text-align: center; z-index: 10; }
-    td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
-    .pokemon-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .pokemon-name { font-weight: bold; font-size: 15px; color: #222; }
-    img { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 8px; }
-    .type { font-weight: bold; white-space: nowrap; }
-    .no-results { text-align: center; padding: 60px; color: #777; font-size: 19px; }
-    .counter { text-align: center; padding: 12px; background: #f0f7ff; color: #1565c0; font-weight: bold; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    h1 { text-align: center; }
+
+    .input-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    input {
+      padding: 8px;
+      width: 220px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #ddd;
+      z-index: 10;
+    }
+
+    th, td {
+      border: 1px solid #bbb;
+      padding: 8px;
+      text-align: center;
+    }
+
+    #table-container {
+      max-height: 550px;
+      overflow-y: scroll;
+      border: 1px solid #999;
+      background: white;
+    }
+
+    .pokemon-img {
+      width: 72px;
+    }
   </style>
 </head>
 <body>
-  <h1><i class="fas fa-search"></i> Pokémon que aprendem os Moves selecionados</h1>
-  <div class="search-container">
-    <div class="inputs">
-      <div class="move-inputs">
-        <div class="input-wrapper"><input type="text" placeholder="Move 1 (ex: Thunderbolt)" id="move1"><div class="suggestions" id="sugg1"></div></div>
-        <div class="input-wrapper"><input type="text" placeholder="Move 2 (opcional)" id="move2"><div class="suggestions" id="sugg2"></div></div>
-        <div class="input-wrapper"><input type="text" placeholder="Move 3 (opcional)" id="move3"><div class="suggestions" id="sugg3"></div></div>
-        <div class="input-wrapper"><input type="text" placeholder="Move 4 (opcional)" id="move4"><div class="suggestions" id="sugg4"></div></div>
-      </div>
-    </div>
+  <h1>Pokémon Move Finder</h1>
 
-    <div class="counter" id="counter">Carregando dados...</div>
+  <div class="input-container">
+    <input id="move1" list="moves" placeholder="Move 1" />
+    <input id="move2" list="moves" placeholder="Move 2" />
+    <input id="move3" list="moves" placeholder="Move 3" />
+    <input id="move4" list="moves" placeholder="Move 4" />
+    <datalist id="moves"></datalist>
+  </div>
 
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>Dex Nº</th>
-            <th>Pokémon</th>
-            <th>Type</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
+  <div id="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Dex Nº</th>
+          <th>Pokémon</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
   </div>
 
   <script>
-    let data = [];
-    let moveList = [];
+    let DATA = [];
 
-    fetch('BaseDadosPokemon.csv')
-      .then(r => r.text())
-      .then(text => {
-        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-        data = parsed.data.filter(row => row.pokemon_id && row.pokemon_name); // segurança
-        moveList = [...new Set(data.map(r => r.move_name).filter(Boolean))].sort();
-        document.getElementById('counter').textContent = `Total: ${getUniquePokemonCount(data)} Pokémon carregados`;
-        renderTable(data);
+    async function loadCSV() {
+      const response = await fetch("BaseDadosPokemon.csv");
+      const text = await response.text();
+      const lines = text.split("\n");
+      const headers = lines[0].split(",");
+
+      const rows = lines.slice(1).map(line => {
+        const cols = line.split(",");
+        let obj = {};
+        headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
+        return obj;
       });
 
-    function getUniquePokemonCount(arr) {
-      return new Set(arr.map(r => r.pokemon_id)).size;
+      DATA = rows;
+      fillMoveList(rows);
+      renderTable(rows);
+    }
+
+    function fillMoveList(rows) {
+      const moveSet = new Set(rows.map(r => r.move_name));
+      const dl = document.getElementById("moves");
+      moveSet.forEach(m => {
+        const o = document.createElement("option");
+        o.value = m;
+        dl.appendChild(o);
+      });
     }
 
     function renderTable(rows) {
-      const tbody = document.getElementById('tableBody');
-      const sorted = rows.sort((a,b) => Number(a.pokemon_id) - Number(b.pokemon_id));
-      
-      if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="no-results">Nenhum Pokémon aprende todos os moves selecionados</td></tr>';
-        document.getElementById('counter').textContent = '0 resultados';
-        return;
-      }
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = "";
 
-      document.getElementById('counter').textContent = `${sorted.length} Pokémon encontrados`;
+      // Group by evolution tree to avoid duplicates
+      const grouped = {};
+      rows.forEach(r => {
+        if (!grouped[r.evolution_tree]) grouped[r.evolution_tree] = r;
+      });
 
-      tbody.innerHTML = sorted.map(row => `
-        <tr>
-          <td>#${String(row.pokemon_id).padStart(4, '0')}</td>
-          <td class="pokemon-cell">
-            <div class="pokemon-name">${row.pokemon_name}</div>
-            <img src="${row.sprites}" alt="${row.pokemon_name}" loading="lazy">
+      Object.values(grouped).forEach(r => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${r.pokemon_id}</td>
+          <td>
+            <div>${r.pokemon_name}</div>
+            <img class="pokemon-img" src="${r.sprites}" />
           </td>
-          <td class="type">${row.types.replace(' / ', '<br>')}</td>
-        </tr>
-      `).join('');
+          <td>${r.types}</td>
+        `;
+
+        tbody.appendChild(tr);
+      });
     }
 
     function filterData() {
-      const inputs = ['move1','move2','move3','move4'].map(id => document.getElementById(id).value.trim().toLowerCase());
-      const selectedMoves = inputs.filter(m => m !== '');
+      const m1 = document.getElementById("move1").value.trim();
+      const m2 = document.getElementById("move2").value.trim();
+      const m3 = document.getElementById("move3").value.trim();
+      const m4 = document.getElementById("move4").value.trim();
 
-      if (selectedMoves.length === 0) {
-        renderTable(data);
+      const chosen = [m1, m2, m3, m4].filter(m => m !== "");
+      if (chosen.length === 0) {
+        renderTable(DATA);
         return;
       }
 
-      // 1. Encontra todas as linhas que têm pelo menos um dos moves
-      const candidates = data.filter(row => 
-        selectedMoves.includes(row.move_name.toLowerCase())
-      );
+      let filtered = DATA;
 
-      // 2. Agrupa por evolution_tree (ou pokemon_id se não tiver)
-      const familyHasAllMoves = new Set();
-      const familyMoves = {};
-
-      candidates.forEach(row => {
-        const tree = row.evolution_tree && row.evolution_tree !== '' ? row.evolution_tree : row.pokemon_id;
-        if (!familyMoves[tree]) familyMoves[tree] = new Set();
-        familyMoves[tree].add(row.move_name.toLowerCase());
+      chosen.forEach(move => {
+        filtered = filtered.filter(r => r.move_name === move);
       });
 
-      // 3. Verifica quais famílias têm TODOS os moves selecionados
-      Object.keys(familyMoves).forEach(tree => {
-        if (selectedMoves.every(m => familyMoves[tree].has(m))) {
-          familyHasAllMoves.add(tree);
-        }
-      });
+      // Filter through evolution tree so we show entire evolution line
+      const evoTrees = new Set(filtered.map(r => r.evolution_tree));
+      const evoFiltered = DATA.filter(r => evoTrees.has(r.evolution_tree));
 
-      // 4. Pega todos os Pokémon que pertencem a essas famílias
-      const result = data.filter(row => {
-        const tree = row.evolution_tree && row.evolution_tree !== '' ? row.evolution_tree : row.pokemon_id;
-        return familyHasAllMoves.has(tree);
-      });
-
-      renderTable(result);
+      renderTable(evoFiltered);
     }
 
-    // Autocomplete com Fuse.js
-    const fuse = new Fuse(moveList, { threshold: 0.3, includeScore: false });
+    document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
 
-    $('input[id^="move"]').on('input', function() {
-      const val = this.value.trim();
-      const suggId = 'sugg' + this.id.slice(-1);
-      const suggDiv = document.getElementById(suggId);
-
-      if (!val) {
-        suggDiv.innerHTML = '';
-        return;
-      }
-
-      const results = fuse.search(val).slice(0, 10);
-      suggDiv.innerHTML = results.map(r => 
-        `<div class="suggestion-item" onclick="selectMove('${this.id}', '${r.item.replace(/'/g, "\\'")}')">${r.item}</div>`
-      ).join('');
-    });
-
-    window.selectMove = function(inputId, moveName) {
-      document.getElementById(inputId).value = moveName;
-      document.getElementById('sugg' + inputId.slice(-1)).innerHTML = '';
-      filterData();
-    };
-
-    // Atualiza ao digitar ou selecionar
-    $('input[id^="move"]').on('input change blur', () => setTimeout(filterData, 100));
-
-    // PapaParse
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
-    document.head.appendChild(script);
+    loadCSV();
   </script>
 </body>
 </html>
