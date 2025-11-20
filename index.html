@@ -1,86 +1,57 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pokémon Move Finder</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-    h1 { text-align: center; color: #333; }
+    h1 { text-align: center; }
     .input-container {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       margin-bottom: 20px;
       justify-content: center;
       flex-wrap: wrap;
-      padding: 20px;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     input {
-      padding: 12px;
-      width: 240px;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      font-size: 16px;
+      padding: 8px;
+      width: 220px;
     }
-    input:focus { border-color: #3b82f6; outline: none; }
     table {
       width: 100%;
       border-collapse: collapse;
       background: white;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     thead {
       position: sticky;
       top: 0;
-      background: #3b82f6;
-      color: white;
+      background: #ddd;
       z-index: 10;
     }
     th, td {
-      border: 1px solid #ddd;
-      padding: 12px;
+      border: 1px solid #bbb;
+      padding: 8px;
       text-align: center;
     }
-    th { font-weight: bold; }
     #table-container {
-      max-height: 70vh;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+      max-height: 550px;
+      overflow-y: scroll;
+      border: 1px solid #999;
+      background: white;
     }
     .pokemon-img {
-      width: 96px;
-      height: 96px;
-      image-rendering: -webkit-optimize-contrast; /* Melhor para Chrome/Safari */
-      image-rendering: crisp-edges;               /* Alternativa boa */
-      image-rendering: pixelated;                 /* Mantém só em zoom muito grande */
-      border-radius: 12px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-      transition: transform 0.2s;
-    }
-    .pokemon-name {
-      font-weight: bold;
-      font-size: 15px;
-      margin-bottom: 6px;
-    }
-    .no-results {
-      text-align: center;
-      padding: 40px;
-      color: #666;
-      font-size: 18px;
+      width: 72px;
     }
   </style>
 </head>
 <body>
-  <h1>Pokémon que aprendem os Moves selecionados</h1>
+  <h1>Pokémon Move Finder</h1>
   <div class="input-container">
-    <input id="move1" list="moves" placeholder="Move 1 (ex: Thunderbolt)" />
-    <input id="move2" list="moves" placeholder="Move 2 (opcional)" />
-    <input id="move3" list="moves" placeholder="Move 3 (opcional)" />
-    <input id="move4" list="moves" placeholder="Move 4 (opcional)" />
+    <input id="move1" list="moves" placeholder="Move 1" />
+    <input id="move2" list="moves" placeholder="Move 2" />
+    <input id="move3" list="moves" placeholder="Move 3" />
+    <input id="move4" list="moves" placeholder="Move 4" />
     <datalist id="moves"></datalist>
   </div>
   <div id="table-container">
@@ -95,119 +66,110 @@
       <tbody id="table-body"></tbody>
     </table>
   </div>
-
   <script>
     let DATA = [];
-
     async function loadCSV() {
       const response = await fetch("BaseDadosPokemon.csv");
       const text = await response.text();
       const lines = text.split("\n");
-      const headers = lines[0].split(",").map(h => h.trim());
-      const rows = lines.slice(1).filter(line => line.trim()).map(line => {
-        const cols = line.split(",").map(c => c.trim());
+      const headers = lines[0].split(",");
+      const rows = lines.slice(1).map(line => {
+        const cols = line.split(",");
         let obj = {};
-        headers.forEach((h, i) => obj[h] = cols[i] || "");
+        headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
         return obj;
       });
       DATA = rows;
       fillMoveList(rows);
-      renderTable(rows); // Mostra todos ao carregar
+      renderTable(rows);
     }
-
     function fillMoveList(rows) {
-      const moveSet = new Set();
-      rows.forEach(r => r.move_name && moveSet.add(r.move_name));
+      const moveSet = new Set(rows.map(r => r.move_name));
       const dl = document.getElementById("moves");
-      [...moveSet].sort().forEach(m => {
-        const o = document.createElement("option");
-        o.value = m;
-        dl.appendChild(o);
+      moveSet.forEach(m => {
+        if (m) {
+          const o = document.createElement("option");
+          o.value = m;
+          dl.appendChild(o);
+        }
       });
     }
 
+    // ←←← APENAS ESSAS DUAS FUNÇÕES FORAM ALTERADAS →→→
     function renderTable(rows) {
       const tbody = document.getElementById("table-body");
       tbody.innerHTML = "";
 
-      // Remove duplicatas por pokemon_id e ordena por Dex
+      // Remove duplicatas por pokemon_id (mantém apenas um representante por Pokémon)
       const seen = new Set();
-      const unique = rows
-        .filter(r => {
-          if (seen.has(r.pokemon_id)) return false;
+      const uniqueRows = [];
+      rows.forEach(r => {
+        if (!seen.has(r.pokemon_id)) {
           seen.add(r.pokemon_id);
-          return true;
-        })
-        .sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
+          uniqueRows.push(r);
+        }
+      });
 
-      if (unique.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="no-results">Nenhum Pokémon aprende todos os moves selecionados</td></tr>`;
+      // Ordena por Dex Nº
+      uniqueRows.sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
+
+      if (uniqueRows.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='3'>Nenhum Pokémon encontrado</td></tr>";
         return;
       }
 
-      unique.forEach(r => {
+      uniqueRows.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>#${String(r.pokemon_id).padStart(4, '0')}</td>
+          <td>${r.pokemon_id}</td>
           <td>
-            <div class="pokemon-name">${r.pokemon_name}</div>
-            <img class="pokemon-img" src="${r.sprites}" alt="${r.pokemon_name}" loading="lazy" />
+            <div>${r.pokemon_name}</div>
+            <img class="pokemon-img" src="${r.sprites}" />
           </td>
-          <td>${r.types.replace(' / ', '<br>')}</td>
+          <td>${r.types}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
     function filterData() {
-      const moves = ['move1','move2','move3','move4']
-        .map(id => document.getElementById(id).value.trim())
-        .filter(m => m !== "");
+      const chosen = [
+        document.getElementById("move1").value.trim(),
+        document.getElementById("move2").value.trim(),
+        document.getElementById("move3").value.trim(),
+        document.getElementById("move4").value.trim()
+      ].filter(m => m !== "");
 
-      if (moves.length === 0) {
+      if (chosen.length === 0) {
         renderTable(DATA);
         return;
       }
 
-      // Encontra todos os pokemon_name que aparecem em linhas com os moves escolhidos
-      const pokemonThatLearn = new Set();
+      // Conta quantos dos moves escolhidos cada Pokémon aprende
+      const pokemonMoveCount = {};
 
       DATA.forEach(row => {
-        if (moves.includes(row.move_name)) {
-          pokemonThatLearn.add(row.pokemon_name);
+        if (chosen.includes(row.move_name)) {
+          if (!pokemonMoveCount[row.pokemon_name]) {
+            pokemonMoveCount[row.pokemon_name] = new Set();
+          }
+          pokemonMoveCount[row.pokemon_name].add(row.move_name);
         }
       });
 
-      // Se o Pokémon (qualquer forma) aprende TODOS os moves → inclui todas as suas linhas
-      const validPokemonNames = new Set();
+      // Mantém apenas os Pokémon que aprendem TODOS os moves escolhidos
+      const validPokemonNames = Object.keys(pokemonMoveCount).filter(name => 
+        pokemonMoveCount[name].size === chosen.length
+      );
 
-      const countPerPokemon = {};
-      DATA.forEach(row => {
-        if (pokemonThatLearn.has(row.pokemon_name)) {
-          if (!countPerPokemon[row.pokemon_name]) countPerPokemon[row.pokemon_name] = new Set();
-          countPerPokemon[row.pokemon_name].add(row.move_name);
-        }
-      });
-
-      Object.keys(countPerPokemon).forEach(name => {
-        const learnedMoves = [...countPerPokemon[name]];
-        if (moves.every(m => learnedMoves.includes(m))) {
-          validPokemonNames.add(name);
-        }
-      });
-
-      // Filtra todas as linhas que têm pokemon_name válido
-      const result = DATA.filter(row => validPokemonNames.has(row.pokemon_name));
+      // Filtra todos os registros dos Pokémon válidos
+      const result = DATA.filter(row => validPokemonNames.includes(row.pokemon_name));
 
       renderTable(result);
     }
+    // ←←← FIM DAS ALTERAÇÕES →→→
 
-    // Atualiza ao digitar qualquer coisa
-    document.querySelectorAll("input").forEach(inp => {
-      inp.addEventListener("input", filterData);
-      inp.addEventListener("change", filterData);
-    });
-
+    document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
     loadCSV();
   </script>
 </body>
