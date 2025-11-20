@@ -23,18 +23,25 @@
       border-collapse: collapse;
       background: white;
       font-size: 14px;
-    }
-    thead {
-      position: sticky;
-      top: 0;
-      background: #ddd;
-      z-index: 10;
+      table-layout: fixed; /* <--- FORÇA TODAS AS COLUNAS COM MESMO TAMANHO */
     }
     th, td {
       border: 1px solid #bbb;
       padding: 8px;
       text-align: center;
+      width: 10%; /* <--- TODAS AS 10 COLUNAS COM 10% */
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
+    th {
+      cursor: pointer;
+      background: #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    th:hover { background: #ccc; }
     #table-container {
       max-height: 550px;
       overflow-y: scroll;
@@ -43,6 +50,8 @@
     }
     .pokemon-img {
       width: 72px;
+      height: 72px;
+      image-rendering: auto;
     }
   </style>
 </head>
@@ -59,21 +68,22 @@
     <table>
       <thead>
         <tr>
-          <th>Dex Nº</th>
-          <th>Pokémon</th>
-          <th>Type</th>
-          <th>HP</th>
-          <th>ATK</th>
-          <th>DEF</th>
-          <th>SP.ATK</th>
-          <th>SP.DEF</th>
-          <th>SPD</th>
-          <th>Total</th>
+          <th data-col="pokemon_id">Dex Nº</th>
+          <th data-col="pokemon_name">Pokémon</th>
+          <th data-col="types">Type</th>
+          <th data-col="HP">HP</th>
+          <th data-col="ATK">ATK</th>
+          <th data-col="DEF">DEF</th>
+          <th data-col="SP.ATK">SP.ATK</th>
+          <th data-col="SP.DEF">SP.DEF</th>
+          <th data-col="SPD">SPD</th>
+          <th data-col="Total">Total</th>
         </tr>
       </thead>
       <tbody id="table-body"></tbody>
     </table>
   </div>
+
 <script>
 /* ---------------- PARSER CSV SEGURO ---------------- */
 function parseCSV(text) {
@@ -84,35 +94,19 @@ function parseCSV(text) {
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     const next = text[i + 1];
-    if (char === '"' && next === '"') {
-      cell += '"';
-      i++;
-    }
-    else if (char === '"') {
-      insideQuotes = !insideQuotes;
-    }
-    else if (char === "," && !insideQuotes) {
-      row.push(cell);
-      cell = "";
-    }
-    else if (char === "\n" && !insideQuotes) {
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    }
-    else {
-      cell += char;
-    }
+    if (char === '"' && next === '"') { cell += '"'; i++; }
+    else if (char === '"') insideQuotes = !insideQuotes;
+    else if (char === "," && !insideQuotes) { row.push(cell); cell = ""; }
+    else if (char === "\n" && !insideQuotes) { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += char;
   }
-  if (cell !== "" || row.length > 0) {
-    row.push(cell);
-    rows.push(row);
-  }
+  if (cell !== "" || row.length > 0) { row.push(cell); rows.push(row); }
   return rows;
 }
+
 /* ---------------- CARREGAR CSV ---------------- */
 let DATA = [];
+let originalOrder = []; // guarda a ordem original (por Dex Nº crescente)
 async function loadCSV() {
   const response = await fetch("BaseDadosPokemon.csv");
   const text = await response.text();
@@ -124,8 +118,10 @@ async function loadCSV() {
     return obj;
   });
   fillMoveList(DATA);
+  originalOrder = [...DATA];
   renderTable(DATA);
 }
+
 /* ----------- LISTA DE MOVES ----------- */
 function fillMoveList(rows) {
   const moveSet = new Set(rows.map(r => r.move_name));
@@ -138,6 +134,7 @@ function fillMoveList(rows) {
     }
   });
 }
+
 /* ----------- GERAR TABELA ----------- */
 function renderTable(rows) {
   const tbody = document.getElementById("table-body");
@@ -150,7 +147,6 @@ function renderTable(rows) {
       uniqueRows.push(r);
     }
   });
-  uniqueRows.sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
   if (uniqueRows.length === 0) {
     tbody.innerHTML = "<tr><td colspan='10'>Nenhum Pokémon encontrado</td></tr>";
     return;
@@ -175,6 +171,49 @@ function renderTable(rows) {
     tbody.appendChild(tr);
   });
 }
+
+/* ----------- ORDENAR AO CLICAR NO CABEÇALHO ----------- */
+let sortState = {}; // guarda o estado de cada coluna: 0 = original, 1 = asc, -1 = desc
+document.querySelectorAll("th").forEach(th => {
+  th.addEventListener("click", () => {
+    const col = th.getAttribute("data-col");
+    const current = sortState[col] || 0;
+    sortState = {}; // reseta todos os outros
+    sortState[col] = current === 0 ? 1 : (current === 1 ? -1 : 0);
+
+    let sorted = [...DATA];
+    const seen = new Set();
+    const unique = [];
+    sorted.forEach(r => {
+      if (!seen.has(r.pokemon_id)) {
+        seen.add(r.pokemon_id);
+        unique.push(r);
+      }
+    });
+
+    if (sortState[col] === 0) {
+      // volta à ordem original (Dex crescente)
+      renderTable(originalOrder);
+      return;
+    }
+
+    const isText = col === "pokemon_name" || col === "types";
+    const multiplier = sortState[col];
+
+    unique.sort((a, b) => {
+      let va = isText ? (a[col] || "") : Number(a[col] || 0);
+      let vb = isText ? (b[col] || "") : Number(b[col] || 0);
+      if (isText) {
+        return multiplier * va.localeCompare(vb);
+      } else {
+        return multiplier * (va - vb);
+      }
+    });
+
+    renderTable(unique);
+  });
+});
+
 /* ----------- FILTRO POR MOVES ----------- */
 function filterData() {
   const chosen = [
@@ -184,7 +223,7 @@ function filterData() {
     move4.value.trim()
   ].filter(m => m !== "");
   if (chosen.length === 0) {
-    renderTable(DATA);
+    renderTable(originalOrder);
     return;
   }
   const pokemonMoveCount = {};
