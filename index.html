@@ -47,6 +47,7 @@
 </head>
 <body>
   <h1>Pokémon Move Finder</h1>
+
   <div class="input-container">
     <input id="move1" list="moves" placeholder="Move 1" />
     <input id="move2" list="moves" placeholder="Move 2" />
@@ -54,6 +55,7 @@
     <input id="move4" list="moves" placeholder="Move 4" />
     <datalist id="moves"></datalist>
   </div>
+
   <div id="table-container">
     <table>
       <thead>
@@ -66,111 +68,156 @@
       <tbody id="table-body"></tbody>
     </table>
   </div>
-  <script>
-    let DATA = [];
-    async function loadCSV() {
-      const response = await fetch("BaseDadosPokemon.csv");
-      const text = await response.text();
-      const lines = text.split("\n");
-      const headers = lines[0].split(",");
-      const rows = lines.slice(1).map(line => {
-        const cols = line.split(",");
-        let obj = {};
-        headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
-        return obj;
-      });
-      DATA = rows;
-      fillMoveList(rows);
-      renderTable(rows);
+
+<script>
+/* ---------------- PARSER CSV SEGURO ---------------- */
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let insideQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"' && next === '"') {
+      // Aspas escapadas
+      cell += '"';
+      i++;
     }
-    function fillMoveList(rows) {
-      const moveSet = new Set(rows.map(r => r.move_name));
-      const dl = document.getElementById("moves");
-      moveSet.forEach(m => {
-        if (m) {
-          const o = document.createElement("option");
-          o.value = m;
-          dl.appendChild(o);
-        }
-      });
+    else if (char === '"') {
+      insideQuotes = !insideQuotes;
     }
+    else if (char === "," && !insideQuotes) {
+      row.push(cell);
+      cell = "";
+    }
+    else if (char === "\n" && !insideQuotes) {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    }
+    else {
+      cell += char;
+    }
+  }
 
-    // ←←← APENAS ESSAS DUAS FUNÇÕES FORAM ALTERADAS →→→
-    function renderTable(rows) {
-      const tbody = document.getElementById("table-body");
-      tbody.innerHTML = "";
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
 
-      // Remove duplicatas por pokemon_id (mantém apenas um representante por Pokémon)
-      const seen = new Set();
-      const uniqueRows = [];
-      rows.forEach(r => {
-        if (!seen.has(r.pokemon_id)) {
-          seen.add(r.pokemon_id);
-          uniqueRows.push(r);
-        }
-      });
+  return rows;
+}
 
-      // Ordena por Dex Nº
-      uniqueRows.sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
+/* ---------------- CARREGAR CSV ---------------- */
+let DATA = [];
 
-      if (uniqueRows.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='3'>Nenhum Pokémon encontrado</td></tr>";
-        return;
+async function loadCSV() {
+  const response = await fetch("BaseDadosPokemon.csv");
+  const text = await response.text();
+
+  const lines = parseCSV(text);
+  const headers = lines[0];
+
+  DATA = lines.slice(1).map(cols => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
+    return obj;
+  });
+
+  fillMoveList(DATA);
+  renderTable(DATA);
+}
+
+/* ----------- LISTA DE MOVES ----------- */
+function fillMoveList(rows) {
+  const moveSet = new Set(rows.map(r => r.move_name));
+  const dl = document.getElementById("moves");
+
+  moveSet.forEach(m => {
+    if (m) {
+      const o = document.createElement("option");
+      o.value = m;
+      dl.appendChild(o);
+    }
+  });
+}
+
+/* ----------- GERAR TABELA ----------- */
+function renderTable(rows) {
+  const tbody = document.getElementById("table-body");
+  tbody.innerHTML = "";
+
+  const seen = new Set();
+  const uniqueRows = [];
+
+  rows.forEach(r => {
+    if (!seen.has(r.pokemon_id)) {
+      seen.add(r.pokemon_id);
+      uniqueRows.push(r);
+    }
+  });
+
+  uniqueRows.sort((a, b) => Number(a.pokemon_id) - Number(b.pokemon_id));
+
+  if (uniqueRows.length === 0) {
+    tbody.innerHTML = "<tr><td colspan='3'>Nenhum Pokémon encontrado</td></tr>";
+    return;
+  }
+
+  uniqueRows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.pokemon_id}</td>
+      <td>
+        <div>${r.pokemon_name}</div>
+        <img class="pokemon-img" src="${r.sprites}" />
+      </td>
+      <td>${r.types}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ----------- FILTRO POR MOVES ----------- */
+function filterData() {
+  const chosen = [
+    move1.value.trim(),
+    move2.value.trim(),
+    move3.value.trim(),
+    move4.value.trim()
+  ].filter(m => m !== "");
+
+  if (chosen.length === 0) {
+    renderTable(DATA);
+    return;
+  }
+
+  const pokemonMoveCount = {};
+
+  DATA.forEach(row => {
+    if (chosen.includes(row.move_name)) {
+      if (!pokemonMoveCount[row.pokemon_name]) {
+        pokemonMoveCount[row.pokemon_name] = new Set();
       }
-
-      uniqueRows.forEach(r => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${r.pokemon_id}</td>
-          <td>
-            <div>${r.pokemon_name}</div>
-            <img class="pokemon-img" src="${r.sprites}" />
-          </td>
-          <td>${r.types}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+      pokemonMoveCount[row.pokemon_name].add(row.move_name);
     }
+  });
 
-    function filterData() {
-      const chosen = [
-        document.getElementById("move1").value.trim(),
-        document.getElementById("move2").value.trim(),
-        document.getElementById("move3").value.trim(),
-        document.getElementById("move4").value.trim()
-      ].filter(m => m !== "");
+  const validPokemonNames = Object.keys(pokemonMoveCount)
+    .filter(name => pokemonMoveCount[name].size === chosen.length);
 
-      if (chosen.length === 0) {
-        renderTable(DATA);
-        return;
-      }
+  const result = DATA.filter(row => validPokemonNames.includes(row.pokemon_name));
 
-      // Conta quantos dos moves escolhidos cada Pokémon aprende
-      const pokemonMoveCount = {};
+  renderTable(result);
+}
 
-      DATA.forEach(row => {
-        if (chosen.includes(row.move_name)) {
-          if (!pokemonMoveCount[row.pokemon_name]) {
-            pokemonMoveCount[row.pokemon_name] = new Set();
-          }
-          pokemonMoveCount[row.pokemon_name].add(row.move_name);
-        }
-      });
+document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
+loadCSV();
+</script>
 
-      // Mantém apenas os Pokémon que aprendem TODOS os moves escolhidos
-      const validPokemonNames = Object.keys(pokemonMoveCount).filter(name => 
-        pokemonMoveCount[name].size === chosen.length
-      );
-
-      // Filtra todos os registros dos Pokémon válidos
-      const result = DATA.filter(row => validPokemonNames.includes(row.pokemon_name));
-
-      renderTable(result);
-    }
-    // ←←← FIM DAS ALTERAÇÕES →→→
-
-    document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
-    loadCSV();
-  </script>
 </body>
 </html>
