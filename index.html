@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokemon Moves Filter</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h1 { margin-bottom: 20px; }
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; }
+    input { padding: 8px; width: 200px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
+    thead th { position: sticky; top: 0; background: #f8f8f8; }
+    .table-container { max-height: 500px; overflow-y: scroll; border: 1px solid #ccc; }
+    img { width: 80px; }
+  </style>
+</head>
+<body>
+  <h1>Pokémon Move Search</h1>
+
+  <div class="filters">
+    <input id="move1" list="moves" placeholder="Move 1" />
+    <input id="move2" list="moves" placeholder="Move 2" />
+    <input id="move3" list="moves" placeholder="Move 3" />
+    <input id="move4" list="moves" placeholder="Move 4" />
+    <button onclick="applyFilters()">Filter</button>
+  </div>
+
+  <datalist id="moves"></datalist>
+
+  <div class="table-container">
+    <table id="pokemonTable">
+      <thead>
+        <tr>
+          <th>Dex Nº</th>
+          <th>Pokémon</th>
+          <th>Type</th>
+          <th>Moves</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+<script>
+let data = [];
+
+async function loadData() {
+  const resp = await fetch('BaseDadosPokemon.csv');
+  const text = await resp.text();
+  const rows = text.split('\n').map(r => r.split(','));
+  const header = rows.shift();
+
+  data = rows.map(r => Object.fromEntries(header.map((h,i)=>[h, r[i]])));
+
+  const moves = [...new Set(data.map(d => d.move_name))].sort();
+  const moveList = document.getElementById('moves');
+  moves.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    moveList.appendChild(opt);
+  });
+
+  renderTable(data);
+}
+
+function renderTable(rows) {
+  const tbody = document.querySelector('#pokemonTable tbody');
+  tbody.innerHTML = '';
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.pokemon_id}</td>
+      <td><div>${r.pokemon_name}</div><img src="${r.sprites}" /></td>
+      <td>${r.types}</td>
+      <td>${r.move_name}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function applyFilters() {
+  const chosen = [move1.value, move2.value, move3.value, move4.value].filter(x=>x);
+  if (chosen.length === 0) { renderTable(data); return; }
+
+  const filtered = data.filter(r => chosen.includes(r.move_name));
+
+  const evoGroups = [...new Set(filtered.map(r => r.evolution_tree))];
+
+  const finalRows = data.filter(r => evoGroups.includes(r.evolution_tree));
+
+  renderTable(finalRows);
+}
+
+loadData();
+</script>
+</body>
+</html>
