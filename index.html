@@ -3,98 +3,163 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pokemon Moves Filter</title>
+  <title>Pokémon Move Finder</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    h1 { margin-bottom: 20px; }
-    .filters { display: flex; gap: 10px; margin-bottom: 20px; }
-    input { padding: 8px; width: 200px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
-    thead th { position: sticky; top: 0; background: #f8f8f8; }
-    .table-container { max-height: 500px; overflow-y: scroll; border: 1px solid #ccc; }
-    img { width: 80px; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    h1 { text-align: center; }
+
+    .input-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    input {
+      padding: 8px;
+      width: 220px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #ddd;
+      z-index: 10;
+    }
+
+    th, td {
+      border: 1px solid #bbb;
+      padding: 8px;
+      text-align: center;
+    }
+
+    #table-container {
+      max-height: 550px;
+      overflow-y: scroll;
+      border: 1px solid #999;
+      background: white;
+    }
+
+    .pokemon-img {
+      width: 72px;
+    }
   </style>
 </head>
 <body>
-  <h1>Pokémon Move Search</h1>
+  <h1>Pokémon Move Finder</h1>
 
-  <div class="filters">
+  <div class="input-container">
     <input id="move1" list="moves" placeholder="Move 1" />
     <input id="move2" list="moves" placeholder="Move 2" />
     <input id="move3" list="moves" placeholder="Move 3" />
     <input id="move4" list="moves" placeholder="Move 4" />
-    <button onclick="applyFilters()">Filter</button>
+    <datalist id="moves"></datalist>
   </div>
 
-  <datalist id="moves"></datalist>
-
-  <div class="table-container">
-    <table id="pokemonTable">
+  <div id="table-container">
+    <table>
       <thead>
         <tr>
           <th>Dex Nº</th>
           <th>Pokémon</th>
           <th>Type</th>
-          <th>Moves</th>
         </tr>
       </thead>
-      <tbody></tbody>
+      <tbody id="table-body"></tbody>
     </table>
   </div>
 
-<script>
-let data = [];
+  <script>
+    let DATA = [];
 
-async function loadData() {
-  const resp = await fetch('BaseDadosPokemon.csv');
-  const text = await resp.text();
-  const rows = text.split('\n').map(r => r.split(','));
-  const header = rows.shift();
+    async function loadCSV() {
+      const response = await fetch("BaseDadosPokemon.csv");
+      const text = await response.text();
+      const lines = text.split("\n");
+      const headers = lines[0].split(",");
 
-  data = rows.map(r => Object.fromEntries(header.map((h,i)=>[h, r[i]])));
+      const rows = lines.slice(1).map(line => {
+        const cols = line.split(",");
+        let obj = {};
+        headers.forEach((h, i) => obj[h.trim()] = cols[i] ? cols[i].trim() : "");
+        return obj;
+      });
 
-  const moves = [...new Set(data.map(d => d.move_name))].sort();
-  const moveList = document.getElementById('moves');
-  moves.forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m;
-    moveList.appendChild(opt);
-  });
+      DATA = rows;
+      fillMoveList(rows);
+      renderTable(rows);
+    }
 
-  renderTable(data);
-}
+    function fillMoveList(rows) {
+      const moveSet = new Set(rows.map(r => r.move_name));
+      const dl = document.getElementById("moves");
+      moveSet.forEach(m => {
+        const o = document.createElement("option");
+        o.value = m;
+        dl.appendChild(o);
+      });
+    }
 
-function renderTable(rows) {
-  const tbody = document.querySelector('#pokemonTable tbody');
-  tbody.innerHTML = '';
+    function renderTable(rows) {
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = "";
 
-  rows.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${r.pokemon_id}</td>
-      <td><div>${r.pokemon_name}</div><img src="${r.sprites}" /></td>
-      <td>${r.types}</td>
-      <td>${r.move_name}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
+      // Group by evolution tree to avoid duplicates
+      const grouped = {};
+      rows.forEach(r => {
+        if (!grouped[r.evolution_tree]) grouped[r.evolution_tree] = r;
+      });
 
-function applyFilters() {
-  const chosen = [move1.value, move2.value, move3.value, move4.value].filter(x=>x);
-  if (chosen.length === 0) { renderTable(data); return; }
+      Object.values(grouped).forEach(r => {
+        const tr = document.createElement("tr");
 
-  const filtered = data.filter(r => chosen.includes(r.move_name));
+        tr.innerHTML = `
+          <td>${r.pokemon_id}</td>
+          <td>
+            <div>${r.pokemon_name}</div>
+            <img class="pokemon-img" src="${r.sprites}" />
+          </td>
+          <td>${r.types}</td>
+        `;
 
-  const evoGroups = [...new Set(filtered.map(r => r.evolution_tree))];
+        tbody.appendChild(tr);
+      });
+    }
 
-  const finalRows = data.filter(r => evoGroups.includes(r.evolution_tree));
+    function filterData() {
+      const m1 = document.getElementById("move1").value.trim();
+      const m2 = document.getElementById("move2").value.trim();
+      const m3 = document.getElementById("move3").value.trim();
+      const m4 = document.getElementById("move4").value.trim();
 
-  renderTable(finalRows);
-}
+      const chosen = [m1, m2, m3, m4].filter(m => m !== "");
+      if (chosen.length === 0) {
+        renderTable(DATA);
+        return;
+      }
 
-loadData();
-</script>
+      let filtered = DATA;
+
+      chosen.forEach(move => {
+        filtered = filtered.filter(r => r.move_name === move);
+      });
+
+      // Filter through evolution tree so we show entire evolution line
+      const evoTrees = new Set(filtered.map(r => r.evolution_tree));
+      const evoFiltered = DATA.filter(r => evoTrees.has(r.evolution_tree));
+
+      renderTable(evoFiltered);
+    }
+
+    document.querySelectorAll("input").forEach(inp => inp.addEventListener("input", filterData));
+
+    loadCSV();
+  </script>
 </body>
 </html>
